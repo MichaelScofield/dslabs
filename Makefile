@@ -13,17 +13,8 @@ JAR_FILES = build/libs/framework.jar \
 OTHER_FILES = build/doc/ lombok.config deps/oddity.jar
 
 
-ifeq ($(shell uname -s),Darwin)
-	TAR = gtar
-else
-	TAR = tar
-endif
-
-ifeq ($(shell uname -s),Darwin)
-	CP = gcp
-else
-	CP = cp
-endif
+TAR = tar
+CP = cp
 
 
 all: build/handout/
