@@ -8,6 +8,9 @@ import lombok.EqualsAndHashCode;
 import lombok.NonNull;
 import lombok.ToString;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
 
 @ToString
 @EqualsAndHashCode
@@ -61,23 +64,26 @@ public class KVStore implements Application {
         @NonNull private final String value;
     }
 
-    // Your code here...
+    private final ConcurrentMap<String, String> kvStore = new ConcurrentHashMap<>();
 
     @Override
     public KVStoreResult execute(Command command) {
         if (command instanceof Get) {
             Get g = (Get) command;
-            // Your code here...
+            String v = kvStore.get(g.key);
+            return v == null ? new KeyNotFound() : new GetResult(v);
         }
 
         if (command instanceof Put) {
             Put p = (Put) command;
-            // Your code here...
+            kvStore.put(p.key, p.value);
+            return new PutOk();
         }
 
         if (command instanceof Append) {
             Append a = (Append) command;
-            // Your code here...
+            String v = kvStore.merge(a.key, a.value, String::concat);
+            return new AppendResult(v);
         }
 
         throw new IllegalArgumentException();
