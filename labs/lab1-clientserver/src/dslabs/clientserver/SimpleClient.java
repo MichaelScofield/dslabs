@@ -1,10 +1,9 @@
 package dslabs.clientserver;
 
+import dslabs.atmostonce.AMOCommand;
 import dslabs.framework.*;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Simple client that sends requests to a single server and returns responses.
@@ -16,7 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @EqualsAndHashCode(callSuper = true)
 class SimpleClient extends Node implements Client {
 
-    private static final AtomicInteger SEQUENCE_NUM = new AtomicInteger(0);
+    private volatile int sequence = 1;
 
     private final Address serverAddress;
 
@@ -42,7 +41,7 @@ class SimpleClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     @Override
     public synchronized void sendCommand(Command command) {
-        Request request = new Request(command, SEQUENCE_NUM.getAndIncrement());
+        Request request = new Request(new AMOCommand(address(), command, sequence));
         send(request, serverAddress);
         outstandingRequest = request;
         set(new ClientTimer(request), ClientTimer.CLIENT_RETRY_MILLIS);
@@ -58,7 +57,7 @@ class SimpleClient extends Node implements Client {
         while (reply == null) {
             wait();
         }
-        Result result = reply.result();
+        Result result = reply.result().result();
         reply = null;
         return result;
     }
@@ -70,11 +69,13 @@ class SimpleClient extends Node implements Client {
         if (outstandingRequest == null) {
             return;
         }
-        if (outstandingRequest.sequenceNum() != m.sequenceNum()) {
+        if (m == null || m.result() == null ||
+                m.result().sequenceNum() != outstandingRequest.command().sequenceNum()) {
             return;
         }
         reply = m;
         outstandingRequest = null;
+        sequence = m.result().sequenceNum() + 1;
         notifyAll();
     }
 
@@ -82,7 +83,8 @@ class SimpleClient extends Node implements Client {
         Timer Handlers
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
-        if (outstandingRequest != null && outstandingRequest.sequenceNum() == t.request().sequenceNum()) {
+        if (outstandingRequest != null &&
+                outstandingRequest.command().sequenceNum() == t.request().command().sequenceNum()) {
             send(t.request(), serverAddress);
             set(t, ClientTimer.CLIENT_RETRY_MILLIS);
         }
